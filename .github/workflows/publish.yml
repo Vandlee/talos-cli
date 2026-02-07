@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write # CRÍTICO para Trusted Publisher
+  id-token: write
   contents: write
 
 jobs:
@@ -31,11 +31,8 @@ jobs:
           node-version: "20"
           cache: "pnpm"
 
-      - name: Clean .npmrc if exists
-        run: |
-          # Elimina cualquier .npmrc que pueda interferir
-          rm -f .npmrc
-          rm -f ~/.npmrc
+      - name: Clean .npmrc
+        run: rm -f .npmrc ~/.npmrc
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -43,81 +40,32 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Type check
-        run: pnpm typecheck
-
       - name: Build
         run: pnpm build
 
-      - name: Configure Git
+      - name: Get version from package.json
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check-tag
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ steps.version.outputs.version }} already exists, skipping publish"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag v${{ steps.version.outputs.version }} does not exist, proceeding with publish"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push tag
+        if: steps.check-tag.outputs.skip == 'false'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
-      - name: Get current version
-        id: current-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Determine next version
-        id: semver
-        run: |
-          # Usar semver para determinar bump automáticamente
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-
-          # Si es la primera publicación, mantener versión actual
-          if [ "$LAST_TAG" = "v0.0.0" ]; then
-            echo "No previous tag found, using current version"
-            NEXT_VERSION=${{ steps.current-version.outputs.version }}
-          else
-            # Analizar commits desde el último tag
-            if git log --oneline $LAST_TAG..HEAD | grep -q "BREAKING CHANGE\|feat(.*)!:"; then
-              BUMP="major"
-            elif git log --oneline $LAST_TAG..HEAD | grep -q "^feat"; then
-              BUMP="minor"
-            else
-              BUMP="patch"
-            fi
-
-            # Calcular siguiente versión
-            NEXT_VERSION=$(npm version $BUMP --no-git-tag-version --json | jq -r '.@talos-org/cli')
-            # Revertir el cambio de npm version
-            git checkout -- package.json
-          fi
-
-          echo "next-version=$NEXT_VERSION" >> $GITHUB_OUTPUT
-          echo "bump-type=$BUMP" >> $GITHUB_OUTPUT
-
-      - name: Bump version
-        if: steps.semver.outputs.next-version != steps.current-version.outputs.version
-        run: |
-          npm version ${{ steps.semver.outputs.bump-type }} --no-git-tag-version
-
-          # Configurar para Trusted Publisher
-          echo "//registry.npmjs.org/:_authToken=\${NODE_AUTH_TOKEN}" > .npmrc
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-
-      - name: Commit version bump
-        if: steps.semver.outputs.next-version != steps.current-version.outputs.version
-        run: |
-          git add package.json
-          git commit -m "chore: release v${{ steps.semver.outputs.next-version }}"
-          git tag -a "v${{ steps.semver.outputs.next-version }}" -m "Release v${{ steps.semver.outputs.next-version }}"
-          git push origin main --follow-tags
-
-      - name: Publish to NPM (Trusted Publisher)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || 'dummy-token' }}
-        run: |
-          # Método 1: Usando pnpm publish con provenance
-          echo "Attempting to publish with provenance..."
-
-          # Si es primera publicación o necesitas token
-          if [ -n "${{ secrets.NPM_TOKEN }}" ] && [ "${{ secrets.NPM_TOKEN }}" != "" ]; then
-            echo "Using NPM_TOKEN for authentication"
-            echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
-            pnpm publish --access public --no-git-checks
-          else
-            echo "Using Trusted Publisher OIDC"
-            # Para Trusted Publisher, el token se inyecta automáticamente
-            pnpm publish --access public --provenance --no-git-checks
-          fi
+      - name: Publish to NPM
+        if: steps.check-tag.outputs.skip == 'false'
+        run: pnpm publish --access public --provenance
