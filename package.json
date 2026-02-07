@@ -1,5 +1,5 @@
 {
-  "name": "talos-cli",
+  "name": "@talos-org/cli",
   "version": "0.1.3",
   "description": "",
   "publishConfig": {
