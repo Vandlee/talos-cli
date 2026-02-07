@@ -1,7 +1,9 @@
+#!/usr/bin/env node
+
 import { Command } from "commander";
+import { helloCommand } from "./commands/hello";
 
 import packageJson from "../package.json";
-import { helloCommand } from "./commands/hello";
 
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));

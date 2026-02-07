@@ -1,6 +1,6 @@
 {
   "name": "talos-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "",
   "publishConfig": {
     "access": "public"
@@ -21,7 +21,9 @@
       "default": "./dist/index.js"
     }
   },
-  "bin": "./dist/index.js",
+  "bin": {
+    "talos": "./dist/index.js"
+  },
   "scripts": {
     "talos": "pnpm start:dev",
     "dev": "tsup --watch",
@@ -39,7 +41,6 @@
     "dotenv": "^17.2.4",
     "execa": "^9.6.1",
     "pino": "^10.3.0",
-    "tsup": "^8.5.1",
     "vite-tsconfig-paths": "^6.0.5",
     "zod": "^4.3.6"
   },
@@ -49,6 +50,7 @@
     "prettier": "^3.8.1",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
