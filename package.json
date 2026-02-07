@@ -3,7 +3,8 @@
   "version": "0.1.7-3",
   "description": "",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "license": "MIT",
   "author": {
