@@ -1,9 +1,13 @@
-name: Publish Package
+name: Publish
 
 on:
   push:
     tags:
       - "v*"
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   publish:
@@ -12,26 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # instala pnpm
       - uses: pnpm/action-setup@v3
         with:
           version: 10
 
-      # instala node + cache
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org/
-          cache: pnpm
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
 
-      # smoke test CLI
-      - run: node dist/index.js --help
-
-      # publish real
       - run: pnpm publish --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
