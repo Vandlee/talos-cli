@@ -6,13 +6,13 @@ on:
       - "v*"
 
 permissions:
-  id-token: write # necesario para OIDC
+  id-token: write # required for OIDC
   contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: npm-publish # opcional: si usas environments en GitHub, agrégalo aquí y en Trusted Publisher config
+    environment: npm-publish # use this if you configured it in npm trusted publishers
 
     steps:
       - uses: actions/checkout@v4
@@ -21,14 +21,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22 # o sube a 24 si puedes (trae npm más nuevo)
+          node-version: 22
           registry-url: "https://registry.npmjs.org"
-          # cache: 'pnpm'       # opcional, acelera
+          cache: "pnpm"
 
       - run: pnpm install --frozen-lockfile
+
       - run: pnpm build
+
       - run: pnpm test
 
-      - run: pnpm publish --no-git-checks --access public # agrega --access public explícitamente
+      # Use npm publish with provenance (this triggers OIDC)
+      - run: npm publish --provenance --access public
         env:
-          NODE_AUTH_TOKEN: "" # no necesario con trusted, pero algunos lo ponen vacío para evitar confusiones
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
