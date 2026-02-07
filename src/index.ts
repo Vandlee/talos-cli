@@ -11,7 +11,7 @@ process.on("SIGTERM", () => process.exit(0));
 async function main() {
   const program = new Command()
     .name("talos")
-    .description("Talos CLI Tool")
+    .description("Manage everything.")
     .version(
       packageJson.version || "1.0.0",
       "-v, --version",
