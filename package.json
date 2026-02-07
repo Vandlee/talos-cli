@@ -1,6 +1,6 @@
 {
   "name": "@talos-org/cli",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "",
   "publishConfig": {
     "access": "public"
