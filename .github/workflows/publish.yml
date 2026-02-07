@@ -1,8 +1,9 @@
-name: Publish
+name: Publish Package
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - "v*"
 
 jobs:
   publish:
@@ -11,10 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # instala pnpm
       - uses: pnpm/action-setup@v3
         with:
           version: 10
 
+      # instala node + cache
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -23,7 +26,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: pnpm test
 
+      # smoke test CLI
+      - run: node dist/index.js --help
+
+      # publish real
       - run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
