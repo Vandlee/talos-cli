@@ -48,7 +48,14 @@ jobs:
           # Check for labels on the PR
           LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
 
-          if echo "$LABELS" | grep -q "major"; then
+          # Check for custom version label (e.g., "version:1.5.0")
+          CUSTOM_VERSION=$(echo "$LABELS" | sed -n 's/.*version:\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -1)
+
+          if [ -n "$CUSTOM_VERSION" ]; then
+            echo "type=custom" >> $GITHUB_OUTPUT
+            echo "version=$CUSTOM_VERSION" >> $GITHUB_OUTPUT
+            echo "Version bump: CUSTOM ($CUSTOM_VERSION)"
+          elif echo "$LABELS" | grep -q "major"; then
             echo "type=major" >> $GITHUB_OUTPUT
             echo "Version bump: MAJOR"
           elif echo "$LABELS" | grep -q "minor"; then
@@ -72,8 +79,14 @@ jobs:
         run: |
           TYPE="${{ steps.bump-type.outputs.type }}"
 
-          # Use npm version to bump (doesn't create tag with --no-git-tag-version)
-          npm version $TYPE --no-git-tag-version
+          if [ "$TYPE" = "custom" ]; then
+            # Use custom version directly
+            CUSTOM_VERSION="${{ steps.bump-type.outputs.version }}"
+            npm version $CUSTOM_VERSION --no-git-tag-version
+          else
+            # Use npm version to bump (doesn't create tag with --no-git-tag-version)
+            npm version $TYPE --no-git-tag-version
+          fi
 
           NEW_VERSION=$(node -p "require('./package.json').version")
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT

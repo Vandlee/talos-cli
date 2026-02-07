@@ -36,11 +36,22 @@ When ready to release, create a Pull Request:
 # On GitHub: Create PR from develop → main
 ```
 
-**Important**: Add a label to indicate the type of version bump:
+**Add a label to specify the version bump type:**
 
-- `major` → 1.0.0 → 2.0.0 (breaking changes)
-- `minor` → 1.0.0 → 1.1.0 (new features)
-- `patch` → 1.0.0 → 1.0.1 (bug fixes) **[default if no label]**
+| Label           | Version Change          | Format | Example       |
+| --------------- | ----------------------- | ------ | ------------- |
+| `major`         | Major version           | X.0.0  | 1.0.0 → 2.0.0 |
+| `minor`         | Minor version           | 0.X.0  | 1.0.0 → 1.1.0 |
+| `patch`         | Patch version (default) | 0.0.X  | 1.0.0 → 1.0.1 |
+| `version:X.Y.Z` | Custom version          | Any    | 1.0.0 → 2.5.3 |
+
+**Quick examples:**
+
+- Bump MAJOR: Add label `major`
+- Bump MINOR: Add label `minor`
+- Bump PATCH: No label (default)
+- Set exact version 2.5.0: Add label `version:2.5.0`
+- Set exact version 1.0.0: Add label `version:1.0.0`
 
 ### 3. Automatic Version Bump
 
@@ -97,11 +108,22 @@ git push origin develop
 
 ### PR Labels
 
-| Label   | Version Change | Example      | Use Case            |
-| ------- | -------------- | ------------ | ------------------- |
-| `major` | 1.0.0 → 2.0.0  | Breaking API | Breaking changes    |
-| `minor` | 1.0.0 → 1.1.0  | New features | Backward-compatible |
-| `patch` | 1.0.0 → 1.0.1  | Bug fixes    | Default (no label)  |
+Use labels to control version bumping:
+
+| Label           | What it does        | Format        | Example                 |
+| --------------- | ------------------- | ------------- | ----------------------- |
+| `major`         | Bumps major version | 1.0.0 → 2.0.0 | Breaking API changes    |
+| `minor`         | Bumps minor version | 1.0.0 → 1.1.0 | New features            |
+| `patch`         | Bumps patch version | 1.0.0 → 1.0.1 | Bug fixes (default)     |
+| `version:X.Y.Z` | Sets exact version  | Any           | `version:2.5.3` → 2.5.3 |
+
+**How to use:**
+
+1. Create PR from `develop` → `main`
+2. Add one label from the table above
+3. GitHub Actions auto-bumps the version and commits
+4. Merge the PR
+5. NPM publish happens automatically!
 
 ## GitHub Actions Workflows
 
