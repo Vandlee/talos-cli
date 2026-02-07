@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write # REQUERIDO para Trusted Publisher
-  contents: write
+  id-token: write # REQUIRED for Trusted Publisher
+  contents: write # For creating tags
 
 jobs:
   publish:
@@ -30,9 +30,11 @@ jobs:
         with:
           node-version: "20"
           cache: "pnpm"
+          registry-url: "https://registry.npmjs.org/" # REQUIRED for OIDC
 
-      - name: Clean .npmrc
-        run: rm -f .npmrc ~/.npmrc
+      # REMOVE or comment out the Clean .npmrc step - it breaks OIDC setup
+      # - name: Clean .npmrc
+      #   run: rm -f .npmrc ~/.npmrc
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -49,7 +51,6 @@ jobs:
       - name: Get current version
         id: version
         run: |
-          # Leer versión directamente del package.json
           VERSION=$(node -p "require('./package.json').version")
           echo "Current version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -58,15 +59,21 @@ jobs:
         id: check-tag
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          echo "Checking for tag v${VERSION}"
           if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-            echo "Tag v${VERSION} already exists, skipping publish"
+            echo "Tag v${VERSION} already exists"
             echo "skip=true" >> $GITHUB_OUTPUT
           else
-            echo "Tag v${VERSION} does not exist, will publish"
+            echo "Tag v${VERSION} does not exist"
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Configure Git for tag creation
+      - name: Debug skip status
+        run: |
+          echo "Skip value: ${{ steps.check-tag.outputs.skip }}"
+          echo "Version: ${{ steps.version.outputs.version }}"
+
+      - name: Configure Git
         if: steps.check-tag.outputs.skip == 'false'
         run: |
           git config --global user.name "github-actions[bot]"
@@ -82,6 +89,6 @@ jobs:
       - name: Publish to NPM with Trusted Publisher
         if: steps.check-tag.outputs.skip == 'false'
         run: |
-          # Con Trusted Publisher, el token se inyecta automáticamente via OIDC
-          # El flag --provenance activa la autenticación OIDC
-          pnpm publish --access public --provenance
+          # With Trusted Publisher, no token needed - OIDC is automatic
+          # --provenance is automatic with npm 11.5.1+, but explicit doesn't hurt
+          pnpm publish --access public --provenance --no-git-checks
