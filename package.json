@@ -1,6 +1,6 @@
 {
   "name": "@talos-org/cli",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "",
   "publishConfig": {
     "access": "public"
@@ -13,6 +13,10 @@
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vandlee/talos-cli.git"
+  },
   "keywords": [],
   "type": "module",
   "exports": {
