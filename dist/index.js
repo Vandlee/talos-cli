@@ -1,0 +1,2 @@
+import {Command}from'commander';var s={version:"0.1.0"};var o=new Command("hello").description("Say hello to the user!").option("-n, --name <name>","Name to greet","World").action(e=>i(e));async function i(e){console.log(`Hello, ${e.name}`);}process.on("SIGINT",()=>process.exit(0));process.on("SIGTERM",()=>process.exit(0));async function a(){let e=new Command().name("talos").description("Talos CLI Tool").version(s.version,"-v, --version","display the version number");e.addCommand(o),e.parse();}a();//# sourceMappingURL=index.js.map
+//# sourceMappingURL=index.js.map
