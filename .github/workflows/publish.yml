@@ -6,19 +6,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
+  id-token: write # REQUERIDO para Trusted Publisher
   contents: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: release
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -40,32 +40,48 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Type check
+        run: pnpm typecheck
+
       - name: Build
         run: pnpm build
 
-      - name: Get version from package.json
+      - name: Get current version
         id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        run: |
+          # Leer versión directamente del package.json
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Check if tag exists
         id: check-tag
         run: |
-          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
-            echo "Tag v${{ steps.version.outputs.version }} already exists, skipping publish"
+          VERSION="${{ steps.version.outputs.version }}"
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${VERSION} already exists, skipping publish"
             echo "skip=true" >> $GITHUB_OUTPUT
           else
-            echo "Tag v${{ steps.version.outputs.version }} does not exist, proceeding with publish"
+            echo "Tag v${VERSION} does not exist, will publish"
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create and push tag
+      - name: Configure Git for tag creation
         if: steps.check-tag.outputs.skip == 'false'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
 
-      - name: Publish to NPM
+      - name: Create and push tag
         if: steps.check-tag.outputs.skip == 'false'
-        run: pnpm publish --access public --provenance
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Publish to NPM with Trusted Publisher
+        if: steps.check-tag.outputs.skip == 'false'
+        run: |
+          # Con Trusted Publisher, el token se inyecta automáticamente via OIDC
+          # El flag --provenance activa la autenticación OIDC
+          pnpm publish --access public --provenance
