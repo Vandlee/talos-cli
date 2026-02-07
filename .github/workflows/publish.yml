@@ -3,6 +3,8 @@ name: Publish to NPM
 on:
   push:
     branches: [main]
+    paths:
+      - "package.json" # Only run when version changes
   workflow_dispatch:
 
 permissions:
