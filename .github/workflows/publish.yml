@@ -30,11 +30,7 @@ jobs:
         with:
           node-version: "20"
           cache: "pnpm"
-          registry-url: "https://registry.npmjs.org/" # REQUIRED for OIDC
-
-      # REMOVE or comment out the Clean .npmrc step - it breaks OIDC setup
-      # - name: Clean .npmrc
-      #   run: rm -f .npmrc ~/.npmrc
+          registry-url: "https://registry.npmjs.org/"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -68,11 +64,6 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Debug skip status
-        run: |
-          echo "Skip value: ${{ steps.check-tag.outputs.skip }}"
-          echo "Version: ${{ steps.version.outputs.version }}"
-
       - name: Configure Git
         if: steps.check-tag.outputs.skip == 'false'
         run: |
@@ -86,9 +77,12 @@ jobs:
           git tag -a "v${VERSION}" -m "Release v${VERSION}"
           git push origin "v${VERSION}"
 
+      # Option 1: Use npm directly (more reliable for Trusted Publishing)
       - name: Publish to NPM with Trusted Publisher
         if: steps.check-tag.outputs.skip == 'false'
-        run: |
-          # With Trusted Publisher, no token needed - OIDC is automatic
-          # --provenance is automatic with npm 11.5.1+, but explicit doesn't hurt
-          pnpm publish --access public --provenance --no-git-checks
+        run: npm publish --access public --provenance
+
+      # Option 2: If you must use pnpm, remove --provenance flag
+      # - name: Publish to NPM with Trusted Publisher
+      #   if: steps.check-tag.outputs.skip == 'false'
+      #   run: pnpm publish --access public --no-git-checks
