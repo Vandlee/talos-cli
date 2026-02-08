@@ -1,0 +1,38 @@
+{
+  "name": "ping",
+  "body": [
+    {
+      "version": "0.1.0",
+      "commands": [
+        {
+          "name": "ping",
+          "options": ["-n"],
+          "args": ["google.com"],
+          "action": "ping"
+        }
+      ]
+    },
+    {
+      "version": "0.2.0",
+      "commands": [
+        {
+          "name": "interactive-test",
+          "options": [],
+          "args": ["-Command", "Read-Host 'What is your name?'"],
+          "action": "powershell"
+        }
+      ]
+    },
+    {
+      "version": "0.3.0",
+      "commands": [
+        {
+          "name": "run-tests",
+          "options": ["--verbose", "-v", "--coverage", "--watch"],
+          "args": ["test.js", "--verbose"],
+          "action": "node"
+        }
+      ]
+    }
+  ]
+}
