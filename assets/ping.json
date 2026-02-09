@@ -2,17 +2,19 @@
   "name": "ping",
   "body": [
     {
+      "label": "Ping",
       "version": "0.1.0",
       "commands": [
         {
           "name": "ping",
           "options": ["-n"],
-          "args": ["google.com"],
+          "args": ["<host>"],
           "action": "ping"
         }
       ]
     },
     {
+      "label": "Interactive Test",
       "version": "0.2.0",
       "commands": [
         {
@@ -24,6 +26,7 @@
       ]
     },
     {
+      "label": "Run Tests",
       "version": "0.3.0",
       "commands": [
         {
