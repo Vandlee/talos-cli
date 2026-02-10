@@ -3,7 +3,7 @@ import cliSpinners from "cli-spinners";
 import { Command } from "commander";
 import { execa } from "execa";
 import ora from "ora";
-import { findLocalCommandFile } from "../utils/files";
+import { ensureTalosDirectory, findLocalCommandFile } from "../utils/files";
 import { isPlaceholder } from "../utils/isPlaceholder";
 import { parseExtras } from "../utils/parseExtras";
 
@@ -33,8 +33,19 @@ export async function executeHandler(
 
 async function findCommand(name: string, environment: string, options: any) {
   if (environment === "local") {
+    const commandsPath = await ensureTalosDirectory("commands", true);
+
+    if (!commandsPath) {
+      console.error(
+        "\n❌ Cannot proceed without the .talos/commands directory.",
+      );
+      return;
+    }
+
     await findLocalCommand(name, options);
-  } else if (environment === "internet") {
+  }
+
+  if (environment === "internet") {
     console.log(`Looking for ${name} on the internet...`);
     // Implement internet command lookup logic here
   }
@@ -55,14 +66,16 @@ async function findLocalCommand(name: string, cliOptions: any = {}) {
     const file = await findLocalCommandFile(name);
 
     if (!file) {
-      searchCommandSpinner.fail("Command not found locally.");
+      searchCommandSpinner.fail(`Command "${name}" not found.`);
       return;
     }
 
-    searchCommandSpinner.succeed("Command found locally.");
+    searchCommandSpinner.succeed(`Command "${name}" found locally.`);
 
     if (file.body.length <= 0) {
-      searchCommandSpinner.fail("No versions found for this command.");
+      searchCommandSpinner.fail(
+        `Command "${name}" exists but has no registered versions.`,
+      );
       return;
     }
 
@@ -165,5 +178,12 @@ async function findLocalCommand(name: string, cliOptions: any = {}) {
         }
       }
     }
-  } catch (error) {}
+  } catch (error) {
+    searchCommandSpinner.fail("Failed to load command");
+    if (error instanceof Error) {
+      console.error(`\n❌ ${error.message}\n`);
+    } else {
+      console.error(`\n❌ An unexpected error occurred: ${String(error)}\n`);
+    }
+  }
 }
