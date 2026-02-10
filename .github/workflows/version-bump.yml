@@ -2,9 +2,11 @@ name: Auto Version Bump
 
 on:
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
+  pull_request_review:
+    types: [submitted]
 
 permissions:
   contents: write
@@ -12,15 +14,16 @@ permissions:
 
 jobs:
   version-bump:
-    # Only run if PR was merged into main from develop
-    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'develop'
+    # Only run for PRs targeting main, skip automation PRs
+    if: github.event.pull_request.base.ref == 'main' && !startsWith(github.event.pull_request.head.ref, 'automation/version-bump')
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
@@ -67,8 +70,42 @@ jobs:
             echo "Version bump: PATCH"
           fi
 
+      - name: Check readiness (label or approvals)
+        id: readiness
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const readyLabel = 'ready';
+            const approvalsRequired = 1;
+
+            const labels = (context.payload.pull_request.labels || []).map(l => l.name);
+            const hasReadyLabel = labels.includes(readyLabel);
+
+            const reviews = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100
+            });
+
+            const approvers = new Set();
+            for (const review of reviews.data) {
+              if (review.state === 'APPROVED' && review.user?.login) {
+                approvers.add(review.user.login);
+              }
+            }
+
+            const hasApprovals = approvers.size >= approvalsRequired;
+            const isReady = hasReadyLabel || hasApprovals;
+
+            core.setOutput('ready', String(isReady));
+            core.setOutput('ready_label', String(hasReadyLabel));
+            core.setOutput('approvals', String(approvers.size));
+            core.info(`Ready label: ${hasReadyLabel}; approvals: ${approvers.size}`);
+
       - name: Get current version
         id: current
+        if: steps.readiness.outputs.ready == 'true'
         run: |
           CURRENT=$(node -p "require('./package.json').version")
           echo "version=$CURRENT" >> $GITHUB_OUTPUT
@@ -76,6 +113,7 @@ jobs:
 
       - name: Bump version
         id: bump
+        if: steps.readiness.outputs.ready == 'true'
         run: |
           TYPE="${{ steps.bump-type.outputs.type }}"
 
@@ -94,6 +132,7 @@ jobs:
 
       - name: Check if version changed
         id: check-change
+        if: steps.readiness.outputs.ready == 'true'
         run: |
           if git diff --quiet package.json; then
             echo "changed=false" >> $GITHUB_OUTPUT
@@ -103,15 +142,15 @@ jobs:
             echo "Version changed"
           fi
 
-      - name: Commit and push version bump
-        if: steps.check-change.outputs.changed == 'true'
+      - name: Commit and push version bump to PR branch
+        if: steps.readiness.outputs.ready == 'true' && steps.check-change.outputs.changed == 'true'
         run: |
           git add package.json pnpm-lock.yaml
           git commit -m "chore: bump version to ${{ steps.bump.outputs.version }}"
-          git push origin main
+          git push origin ${{ github.event.pull_request.head.ref }}
 
       - name: Comment on PR
-        if: steps.check-change.outputs.changed == 'true'
+        if: steps.readiness.outputs.ready == 'true' && steps.check-change.outputs.changed == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -124,16 +163,4 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `🚀 Version automatically bumped from \`${oldVersion}\` → \`${newVersion}\` (\`${bumpType}\`)\n\nThis version will be published when the PR is merged to main.`
-            });
-
-      - name: Add label indicating version bump is done
-        if: steps.check-change.outputs.changed == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.addLabels({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: ['version-bumped']
             });
