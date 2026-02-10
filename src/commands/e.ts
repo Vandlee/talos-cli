@@ -2,11 +2,10 @@ import { input, select } from "@inquirer/prompts";
 import cliSpinners from "cli-spinners";
 import { Command } from "commander";
 import { execa } from "execa";
-import { readFile } from "fs/promises";
 import ora from "ora";
-import path from "path";
-import { RegistrySchema } from "../types/schema";
-import { commandsPath } from "../utils/commandsPath";
+import { findLocalCommandFile } from "../utils/files";
+import { isPlaceholder } from "../utils/isPlaceholder";
+import { parseExtras } from "../utils/parseExtras";
 
 export const executeCommand = new Command("e")
   .description("Execute a command")
@@ -52,158 +51,119 @@ async function findLocalCommand(name: string, cliOptions: any = {}) {
 
   await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate async operation
 
-  const filePath = path.join(commandsPath, `${name}.json`);
+  try {
+    const file = await findLocalCommandFile(name);
 
-  const raw = await readFile(filePath, "utf-8");
-  const parsedCommand = JSON.parse(raw);
-
-  const file = RegistrySchema.parse(parsedCommand);
-
-  if (!file) {
-    searchCommandSpinner.fail("Command not found locally.");
-    return;
-  }
-
-  searchCommandSpinner.succeed("Command found locally.");
-
-  if (file.body.length <= 0) {
-    searchCommandSpinner.fail("No versions found for this command.");
-    return;
-  }
-
-  let selectedVersion = file.body[0]; // Default to the first version
-
-  if (file.body.length > 1) {
-    const version = await select({
-      message: "Select a command version to execute:",
-      choices: file.body.map((cmd) => ({ name: cmd.version, value: cmd })),
-    });
-
-    selectedVersion = version || selectedVersion;
-  }
-
-  // Build CLI args from extras while prompting for missing values defined in the registry.
-  const baseCliArgs: string[] = [];
-  const extras = Array.isArray(cliOptions.extras) ? cliOptions.extras : [];
-
-  const knownOptions = new Set(
-    selectedVersion.commands.flatMap((cmd) => cmd.options),
-  );
-  const parsed = parseExtras(extras, knownOptions);
-
-  // Preserve provided flags, unknown flags, and positional args as-is.
-  const existingFlags = new Set(parsed.flags.map((item) => item.flag));
-  for (const item of parsed.flags) {
-    baseCliArgs.push(item.flag);
-    if (item.value !== null) {
-      baseCliArgs.push(item.value);
+    if (!file) {
+      searchCommandSpinner.fail("Command not found locally.");
+      return;
     }
-  }
-  baseCliArgs.push(...parsed.unknownTokens);
-  baseCliArgs.push(...parsed.positionals);
 
-  for (const cmd of selectedVersion.commands) {
-    // Prompt for missing positional args (placeholders like <host> or [host]).
-    const filledArgs: string[] = [];
-    const placeholders = cmd.args.filter((arg) => isPlaceholder(arg));
-    const defaults = cmd.args.filter((arg) => !isPlaceholder(arg));
+    searchCommandSpinner.succeed("Command found locally.");
 
-    for (const placeholder of placeholders) {
-      const label = placeholder.replace(/[\[\]<>]/g, "").trim() || "value";
-      const value = await input({
-        message: `What argument are you gonna send? (${label})`,
+    if (file.body.length <= 0) {
+      searchCommandSpinner.fail("No versions found for this command.");
+      return;
+    }
+
+    let selectedVersion = file.body[0]; // Default to the first version
+
+    if (file.body.length > 1) {
+      const version = await select({
+        message: "Select a command version to execute:",
+        choices: file.body.map((cmd) => ({
+          name: `${cmd.version}${cmd.label ? ` - ${cmd.label}` : ""}`,
+          value: cmd,
+        })),
       });
-      filledArgs.push(value);
+
+      selectedVersion = version || selectedVersion;
     }
 
-    filledArgs.unshift(...defaults);
+    // Build CLI args from extras while prompting for missing values defined in the registry.
+    const baseCliArgs: string[] = [];
+    const extras = Array.isArray(cliOptions.extras) ? cliOptions.extras : [];
 
-    // Prompt for known options that are missing in the CLI.
-    const cmdCliArgs = [...baseCliArgs];
+    const knownOptions = new Set(
+      selectedVersion.commands.flatMap((cmd) => cmd.options),
+    );
+    const parsed = parseExtras(extras, knownOptions);
 
-    if (cmd.options.length > 0) {
-      const hasProvided = cmd.options.some((option) =>
-        existingFlags.has(option),
-      );
-      if (!hasProvided) {
-        const primaryOption = cmd.options[0];
-        const value = await input({
-          message: `What do you want to use for "${primaryOption}" argument?`,
-          default: "",
-        });
-
-        if (value !== "") {
-          cmdCliArgs.push(primaryOption, value);
-        }
+    // Preserve provided flags, unknown flags, and positional args as-is.
+    const existingFlags = new Set(parsed.flags.map((item) => item.flag));
+    for (const item of parsed.flags) {
+      baseCliArgs.push(item.flag);
+      if (item.value !== null) {
+        baseCliArgs.push(item.value);
       }
     }
+    baseCliArgs.push(...parsed.unknownTokens);
+    baseCliArgs.push(...parsed.positionals);
 
     for (const cmd of selectedVersion.commands) {
-      const commandSpinner = ora({
-        text: `Executing command: ${cmd.name}...`,
-        spinner: {
-          frames: cliSpinners.circleHalves.frames,
-          interval: 80,
-        },
-      }).start();
+      // Prompt for missing positional args (placeholders like <host> or [host]).
+      const filledArgs: string[] = [];
+      const placeholders = cmd.args.filter((arg) => isPlaceholder(arg));
+      const defaults = cmd.args.filter((arg) => !isPlaceholder(arg));
 
-      try {
-        commandSpinner.stop();
-
-        // Merge JSON args with CLI args
-        const mergedArgs = [...filledArgs, ...cmdCliArgs];
-
-        console.log(`\n$ ${cmd.action} ${mergedArgs.join(" ")}\n`);
-
-        await execa(cmd.action, mergedArgs, { stdio: "inherit" });
-
-        console.log();
-        commandSpinner.succeed(`Executed command: ${cmd.name}`);
-      } catch (error) {
-        commandSpinner.fail(`Failed to execute command: ${cmd.name}`);
-        if (error instanceof Error) {
-          console.error(`Error: ${error.message}`);
-        }
+      for (const placeholder of placeholders) {
+        const label = placeholder.replace(/[\[\]<>]/g, "").trim() || "value";
+        const value = await input({
+          message: `What argument are you gonna send? (${label})`,
+        });
+        filledArgs.push(value);
       }
-    }
-  }
 
-  function isPlaceholder(value: string) {
-    return /^<[^>]+>$/.test(value) || /^\[[^\]]+\]$/.test(value);
-  }
+      filledArgs.unshift(...defaults);
 
-  function parseExtras(extras: string[], knownOptions: Set<string>) {
-    const flags: Array<{ flag: string; value: string | null }> = [];
-    const unknownTokens: string[] = [];
-    const positionals: string[] = [];
+      // Prompt for known options that are missing in the CLI.
+      const cmdCliArgs = [...baseCliArgs];
 
-    for (let i = 0; i < extras.length; i += 1) {
-      const token = extras[i];
+      if (cmd.options.length > 0) {
+        const hasProvided = cmd.options.some((option) =>
+          existingFlags.has(option),
+        );
+        if (!hasProvided) {
+          const primaryOption = cmd.options[0];
+          const value = await input({
+            message: `What do you want to use for "${primaryOption}" argument?`,
+            default: "",
+          });
 
-      if (token.startsWith("-")) {
-        const next = extras[i + 1];
-        const hasValue = next !== undefined && !next.startsWith("-");
-        const value = hasValue ? next : null;
-
-        if (knownOptions.has(token)) {
-          flags.push({ flag: token, value });
-        } else {
-          unknownTokens.push(token);
-          if (hasValue) {
-            unknownTokens.push(next);
+          if (value !== "") {
+            cmdCliArgs.push(primaryOption, value);
           }
         }
-
-        if (hasValue) {
-          i += 1;
-        }
-
-        continue;
       }
 
-      positionals.push(token);
-    }
+      for (const cmd of selectedVersion.commands) {
+        const commandSpinner = ora({
+          text: `Executing command: ${cmd.name}...`,
+          spinner: {
+            frames: cliSpinners.circleHalves.frames,
+            interval: 80,
+          },
+        }).start();
 
-    return { flags, unknownTokens, positionals };
-  }
+        try {
+          commandSpinner.stop();
+
+          // Merge JSON args with CLI args
+          const mergedArgs = [...filledArgs, ...cmdCliArgs];
+
+          console.log(`\n$ ${cmd.action} ${mergedArgs.join(" ")}\n`);
+
+          await execa(cmd.action, mergedArgs, { stdio: "inherit" });
+
+          console.log();
+          commandSpinner.succeed(`Executed command: ${cmd.name}`);
+        } catch (error) {
+          commandSpinner.fail(`Failed to execute command: ${cmd.name}`);
+          if (error instanceof Error) {
+            console.error(`Error: ${error.message}`);
+          }
+        }
+      }
+    }
+  } catch (error) {}
 }

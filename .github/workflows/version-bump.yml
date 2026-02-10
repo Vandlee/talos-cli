@@ -2,7 +2,7 @@ name: Auto Version Bump
 
 on:
   pull_request:
-    types: [opened, labeled, reopened, synchronize]
+    types: [closed]
     branches:
       - main
 
@@ -12,15 +12,15 @@ permissions:
 
 jobs:
   version-bump:
-    # Only run if PR is from develop branch
-    if: github.head_ref == 'develop'
+    # Only run if PR was merged into main from develop
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'develop'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
@@ -108,7 +108,7 @@ jobs:
         run: |
           git add package.json pnpm-lock.yaml
           git commit -m "chore: bump version to ${{ steps.bump.outputs.version }}"
-          git push origin ${{ github.head_ref }}
+          git push origin main
 
       - name: Comment on PR
         if: steps.check-change.outputs.changed == 'true'

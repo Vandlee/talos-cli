@@ -8,6 +8,7 @@ export const CommandSchema = z.object({
 });
 
 export const CommandBodySchema = z.object({
+  label: z.string().optional(),
   version: z.string(),
   commands: z.array(CommandSchema),
 });
